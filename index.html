@@ -1,0 +1,480 @@
+<script src=lib7.js>
+</script>
+
+<body bgcolor=black text=white link=white alink=white vlink=white>
+<center>
+<canvas id='canvas1' width=800 height=800></canvas>
+</center>
+</body>
+<button value="Refresh" onClick="window.location.reload();" > Replay </button>
+<h3>Project Details: </h3>
+<p>Phong Shading, Parametrically Defined Geometric Objects, Texture Mapping, Scenes with Multiple Objects, Matrix Transformations
+<br />
+<br />
+Implemented phong shading for the blue light source from the small planet onto the death star.
+<br />
+<br />
+Created and used 5 parametrically defined geometric objects:
+<ul>
+  <li>Sphere for the Death Star body, laser hole, and small planet</li>
+  <li>Cylinder for the laser beam</li>
+  <li>Curved polygon for the laser glob that surrounds the planet</li>
+</ul>
+<br />
+Used the Space Hull texture found online (https://www.123rf.com/photo_8971306_seamless-space-hull-ship-pattern-as-background.html) and mapped the texture to the Death Star body.
+<br />
+<br />
+Made a scene with multiple parametric objects using hierarchy and matrix transformations.
+</p>
+
+
+<!!------------------------ VERTEX SHADER ------------------------>
+
+<script id='my_vertex_shader' type='x-shader/x-vertex'>
+   attribute vec3 aPos;
+   attribute vec3 aTan;
+   attribute vec3 aBin;
+   attribute vec2 aUV ;
+
+   uniform   mat4 uMat;
+   uniform   float uTime;
+
+   varying   vec3 vPos;
+   varying   vec3 vTan;
+   varying   vec3 vBin;
+   varying   vec3 vNor;
+   varying   vec2 vUV ;
+
+   uniform float uFL;
+
+   mat4 inverse(mat4 m) {
+      float x = dot(m[0],m[0]), y = dot(m[1],m[1]), z = dot(m[2],m[2]);
+      return mat4(m[0].x / x, m[1].x / y, m[2].x / z, 0.,
+                  m[0].y / x, m[1].y / y, m[2].y / z, 0.,
+                  m[0].z / x, m[1].z / y, m[2].z / z, 0.,
+          -dot(m[0],m[3])/x, -dot(m[1],m[3])/y, -dot(m[2],m[3])/z, 1.);
+   }
+
+   void main() {
+      vec4 pos = uMat * vec4(aPos, 1.);
+      pos /= 1. - pos.z / uFL;
+
+      gl_Position = vec4(pos.xyz, 1.);
+
+      vPos = aPos;
+
+      mat4 iMat = inverse(uMat);
+
+      vTan = (vec4(aTan,.0) * iMat).xyz;
+      vBin = (vec4(aBin,.0) * iMat).xyz;
+
+      vNor = cross(vTan, vBin); // WE USE vTan AND vBin TO COMPUTE vNor.
+
+      vUV  = aUV;
+   }
+</script>
+
+<!!-------------------- FRAGMENT SHADER --------------------------->
+
+<script id='my_fragment_shader' type='x-shader/x-fragment'>
+const int NLIGHTS = 2;
+uniform float uFL;
+uniform mat3  uL[NLIGHTS];
+uniform mat4  uM;
+uniform float uTime;
+
+uniform sampler2D uSampler[3];
+
+varying vec3  vPos;
+varying vec3  vTan;
+varying vec3  vBin;
+varying vec3  vNor;
+varying vec2  vUV ;
+
+void main() {
+   vec3 normal = normalize(vNor);
+   vec3 R = reflect(vec3(0.,0.,-1.), normal);
+
+   float t = .5 + .5 * sin(3. * uTime);
+   t = t * t * (3. - t - t);
+   t = 1.;
+
+   vec3 dNormal1 = texture2D(uSampler[1], vUV * vec2(6.,3.)).xyz * 2. - 1.;
+   vec3 dNormal2 = texture2D(uSampler[2], vUV * vec2(6.,3.)).xyz * 2. - 1.;
+   vec3 dNormal = mix(dNormal1, dNormal2, t);
+
+   dNormal = dNormal.x * normalize(vTan) +
+             dNormal.y * normalize(vBin) +
+             dNormal.z * normalize(vNor) ;
+
+   normal = normalize(normal + dNormal);
+
+   vec3 color = uM[0].rgb;
+   for (int n = 0 ; n < NLIGHTS ; n++) {
+      float d = max(0.,dot(normal, uL[n][0]));
+      color += uL[n][1] * (
+         uM[1].rgb * d * d +
+         uM[2].rgb * pow(max(0., dot(R, uL[n][0])), uM[2].a) );
+   }
+   color *= mix(vec3(1.,1.,1.),
+                texture2D(uSampler[0], vUV).xyz, .5);
+
+   gl_FragColor = vec4(sqrt(color), 1.0);
+}
+</script>
+
+<!!------------------- DESCRIPTIVE TITLE ------------------------>
+<script id='my_title' type='text/html'>
+<font face=helvetica>&nbsp;<h3>Star Wars-Inspired Stop Motion Animation</h3>
+  The Death Star is a superweapon that is capable of mercilessly destroying an entire planet <br>with the power of its Superlaser.
+  <br>
+  Watch this moon-sized technological terror obliterate a small blue planet.
+  <br>
+</script>
+
+
+<!!------------------ GENERAL HTML SUPPORT ---------------------->
+<script>
+var vs = my_vertex_shader.innerHTML,
+    fs = my_fragment_shader.innerHTML;
+    fs = fs.substring(1, fs.length);
+
+document.body.innerHTML = [''
+   ,'<center><font size=6 color=#b0b0b0>' + my_title.innerHTML + '</center>'
+   ,'<TABLE cellspacing=0 cellpadding=0><TR>'
+   ,'<td width=50></td><td><font color=red size=5><div id=errorMessage>&nbsp;</div></font></td>'
+   ,'</TR><TR>'
+   ,'<table cellspacing=10>'
+   ,'<tr>'
+   ,'</td><td valign=top>' + document.body.innerHTML + '</td>'
+   ,'<td valign=top><font size=2 color=red><div id=errorMarker>&nbsp;</div></font></td>'
+   ,'<td valign=top>'
+   ,'<textArea id=textArea spellcheck=false '
+   ,'style="font:20px courier;outline-width:0;border-style:none;resize:none;overflow:scroll;"'
+   ,'></textArea>'
+   ,'</tr></table>'
+   ,'</TR></TABLE>'
+   ].join('');
+
+var i, text = fs.split('\n'), cols = 0;
+for (i = 0 ; i < text.length ; i++)
+   cols = Math.max(cols, text[i].length);
+
+textArea.rows = 30;
+textArea.cols = cols + 2;
+textArea.value = fs;
+textArea.style.backgroundColor = '#202020';
+textArea.style.color = 'white';
+textArea.onkeyup = function() { canvas1.setShaders(vs, this.value); isFirstTime = true; }
+
+let startTime = Date.now();
+
+//------------------------- BUILDING PARAMETRIC MESH OBJECTS -------------------------
+
+let sphere = (u,v) => {
+   let theta = 2 * Math.PI * u,
+       phi = Math.PI * (v - .5);
+   let x = Math.cos(theta) * Math.cos(phi),
+       y = Math.sin(theta) * Math.cos(phi),
+       z = Math.sin(phi);
+   return [ x,y,z, x,y,z, u,v ];
+}
+
+//laser glob
+let glob = (u,v) => {
+   let theta = Math.PI * (u - .5),
+       phi =  Math.PI * (v - .5);
+   let x = Math.cos(theta)*Math.cos(phi),
+       y = Math.cos(theta)*Math.sin(phi),
+       z = Math.cos(theta)/2;
+   return [ x,y,z, x,y,z, u,v ];
+}
+
+//laser hole function == sphere
+let laserHole = (u,v) => {
+   let theta = 2 * Math.PI * u;
+       phi = Math.PI * (v - .5);
+   let x = 2*(Math.cos(theta) * Math.cos(phi)),
+       y = Math.sin(theta) * Math.cos(phi),
+       z = Math.sin(phi);
+   return [ x,y,z, x,y,z, u,v ];
+}
+
+// laserbeam cylinder function
+let laserBeam_1 = (u,v) => {
+  let theta = 2*Math.PI * u,
+      phi = Math.PI * (v );
+  let x = (1/20)*Math.cos(theta),
+      y = (1/20)*Math.sin(theta),
+      z = phi;
+  return [ x,y,z, x,y,z, u,v ];
+}
+
+let r0 = 1, r1 = .4;
+
+let torus = (u,v) => {
+   let theta = 2 * Math.PI * u, ct = Math.cos(theta), st = Math.sin(theta);
+   let phi   = 2 * Math.PI * v, cp = Math.cos(phi  ), sp = Math.sin(phi  );
+
+   return [ ct * (r0 + r1 * cp), st * (r0 + r1 * cp), r1 * sp,
+            ct * cp, st * cp, sp,    u,v ];
+}
+
+let normalize = v => {
+   let s = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+   return [v[0] / s, v[1] / s, v[2] / s];
+}
+
+let subtract = (a,b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+
+/*
+   IN createTriMesh() WE WROTE A WRAPPER FUNCTION AROUND xyzFunc()
+   SO THAT WE CAN USE FINITE DIFFERENCING TO COMPUTE NOT JUST
+   THE LOCATION OF THE VERTEX, BUT ALSO THE TANGENT (ALIGNED WITH
+   THE DERIVATIVE ALONG THE u PARAMETER) AND THE BINORMAL (ALIGNED
+   WITH THE DERIVATIVE ALONG THE v PARAMETER).
+
+   NOW THAT WE ARE RETURNING THREE vec3 VALUES AND ONE vec2 VALUE,
+   EACH VERTEX WILL CONTAIN 11 NUMBERS, RATHER THAN JUST 8 NUMBERS.
+*/
+
+let createTriMesh = (xyzFunc, nCols, nRows) => {
+   let eps = 1 / 1000;
+   let func = (u,v) => {
+      let p  = xyzFunc(u, v);
+      let pu = xyzFunc(u+eps, v);
+      let pv = xyzFunc(u, v+eps);
+
+      let tangent  = normalize(subtract(pu, p));
+      let binormal = normalize(subtract(pv, p));
+
+      return [ p[0],p[1],p[2],
+               tangent[0],tangent[1],tangent[2],
+               binormal[0],binormal[1],binormal[2], u,v ];
+   }
+   let triMesh = [];
+   for (let row = 0 ; row < nRows ; row++) {
+      let v0 = row / nRows;
+      let v1 = (row+1) / nRows;
+
+      for (let col = 0 ; col <= nCols ; col++) {
+         let u = col / nCols;
+         if (row % 2)
+            u = 1 - u;
+
+         let p0 = func(u, v0),
+             p1 = func(u, v1);
+         for (let n = 0 ; n < p0.length ; n++)
+            triMesh.push(p0[n]);
+         for (let n = 0 ; n < p1.length ; n++)
+            triMesh.push(p1[n]);
+      }
+   }
+   return triMesh;
+}
+
+stride = 11;
+let torus32x32 = createTriMesh(torus, 32, 32);
+let sphere16x8 = createTriMesh(sphere, 16,  8);
+let sphere64x32 = createTriMesh(sphere, 64,  32);
+
+//------------------------ ANIMATION --------------------------
+
+// YOU MIGHT WANT TO MOVE THESE SUPPORT FUNCTIONS INTO THE LIBRARY,
+// SO YOU CAN USE THEM LATER IN OTHER THINGS YOU CREATE.
+
+let m = new Mat4();                                    // DEFINE A NEW 4x4 MATRIX OBJECT.
+
+let plastic = (r,g,b,p,s) => {
+   if (p === undefined) p = 10;
+   if (s === undefined) s = 1;
+   return [.2*r,.2*g,.2*b,0, r,g,b,0, s,s,s,p, 0,0,0,0];
+}
+
+let metal = (r,g,b,p,s) => {
+   if (p === undefined) p = 10;
+   if (s === undefined) s = 1;
+   return [.2*r,.2*g,.2*b,0, r,g,b,0, s*r,s*g,s*b,p, 0,0,0,0];
+}
+
+let lights = [];
+
+let clearLights = () => lights = [];
+
+let addLight = (dir,color) => {
+   dir = normalize(dir);
+   let newLight = [dir[0],dir[1],dir[2], color[0],color[1],color[2], 0,0,0];
+   for (let n = 0 ; n < newLight.length ; n++)
+      lights.push(newLight[n]);
+}
+
+// NAIVE ALGORITHM FOR EVALUATING BEZIER CURVES.
+// THIS IS EASIER TO UNDERSTAND, BUT CANNOT BE OPTIMIZED.
+
+let mix = (a,b,t) => a + t * (b - a);
+
+let evalBezier1 = (P, t) => {
+   let A = mix(P[0], P[1], t);
+   let B = mix(P[1], P[2], t);
+   let C = mix(P[2], P[3], t);
+
+   return mix ( mix(A,B,t), mix(B,C,t), t );
+}
+
+// BETTER ALGORITHM FOR EVALUATING BEZIER CURVES.
+// THIS CAN BE OPTIMIZED TO RUN VERY EFFICIENTLY,
+// IF C = mxv(bezierMatrix, P) IS DONE BEFOREHAND.
+
+let bezierMatrix = [ -1,3,-3,1, 3,-6,3,0, -3,3,0,0, 1,0,0,0 ];
+
+let mxv = (m, v) => {
+   let dst = [];
+   for (let i = 0 ; i < 4 ; i++) {
+      dst[i] = 0;
+      for (let j = 0 ; j < 4 ; j++)
+         dst[i] += m[i + 4*j] * v[j];
+   }
+   return dst;
+}
+
+let evalBezier = (P, t) => {
+   let C = mxv(bezierMatrix, P);
+/*
+   return t*t*t * C[0] + t*t * C[1] + t * C[2] + C[3];
+*/
+   return C[3] + t * (C[2] + t * (C[1] + t * C[0]));
+}
+
+let evalBezierSpline = (S, t) => {
+   let T = (t % 1) * S.length;
+   let i = Math.floor(T);
+   return evalBezier(S[i], T - i);
+}
+
+let isFirstTime = true;
+
+function animate(gl) {
+   let time = (Date.now() - startTime) / 1000;
+
+   setUniform('3fv', 'uMouse', canvas1.mouseInfo);
+   setUniform('1f', 'uTime', time);
+
+   if (isFirstTime) {
+      isFirstTime = false;
+
+      setUniform('1f', 'uFL', 3.5);
+
+      // SPECIFY BACKGROUND COLOR AND LIGHT SOURCES
+
+      bgColor = [0,0,0];
+      clearLights();
+
+      //addLight([ 1, 0, 0], [1,1,1]);
+      addLight([-.5,.9,.7], [0, .2, .7]); //light from laser on death star and planet
+      setUniform('Matrix3fv', 'uL', false, lights);
+
+      let textureImageFiles = ['spacehull.jpg'];
+
+      let images = [];
+      let samplers = [];
+      for (let n = 0 ; n < textureImageFiles.length ; n++) {
+         images[n] = new Image();
+         samplers.push(n);
+         images[n].onload = () => {
+            try {
+               gl.activeTexture (gl.TEXTURE0 + n);
+               gl.bindTexture   (gl.TEXTURE_2D, gl.createTexture());
+               gl.pixelStorei   (gl.UNPACK_FLIP_Y_WEBGL, true);
+               gl.texImage2D    (gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[n]);
+               gl.generateMipmap(gl.TEXTURE_2D);
+            }
+            catch(e) { console.log(e); }
+         }
+         images[n].src = textureImageFiles[n];
+         //images[n].crossOrigin = "anonymous";
+      }
+      setUniform('1iv', 'uSampler', samplers);
+   }
+
+   // CLEAR EVERYTHING TO THE BACKGROUND COLOR
+
+   gl.clearColor(bgColor[0],bgColor[1],bgColor[2],1);
+
+   //small planet
+   m.save();
+     m.translate(-4.78,4.,5.);
+     m.scale(.12);
+     if(time < 8) {
+       drawMesh(m, createTriMesh(sphere, 100,  50), metal(0, .2, .7));
+     } else {
+       if(time >= 8 && time < 8.2) {
+         m.scale(6);
+         drawMesh(m, createTriMesh(sphere, 100,  50), metal(0, .2, .7 ));
+       } else if(time >= 8.2 && time < 8.4) {
+         m.scale(6.5);
+         drawMesh(m, createTriMesh(sphere, 100,  50), metal(0, .2, .7 ));
+       } else if (time >= 8.4 && time < 8.7) {
+         m.scale(6);
+         drawMesh(m, createTriMesh(sphere, 100,  50), metal(0, .2, .7 ));
+       }
+     }
+   m.restore();
+
+    //death star body
+    m.save();
+      m.identity();
+      if(time < 10) {
+        m.scale(.6);
+        m.rotateX(-Math.PI*.5);
+        m.translate(.5,0,0);
+        drawMesh(m, sphere64x32, [.04,.04,.04,0, .5,.5,.5,0, .5,.5,.5,80, 0,0,0,0]);
+      } else if (time < 20){
+        m.scale((.6/time)*8);
+        m.translate(.5,.1,time*(.05));
+        drawMesh(m, sphere64x32, metal(.04,.04,.04));
+      }
+    m.restore();
+
+    //laser hole
+    m.save();
+     m.identity();
+     if(time < 10) {
+       m.translate(1.2,1.7,3.5);
+       m.scale(.12);
+       drawMesh(m, createTriMesh(sphere, 100,  50), metal(.02, .02, .02));
+     }
+    m.restore();
+
+    //laserbeam
+    m.save();
+     if(time >= 5 && time < 9) {
+       m.rotateX(Math.PI*.5);
+       m.rotateZ(7.5);
+       m.translate(-2.3,2.15,3.);
+       m.scale(.2);
+       drawMesh(m, createTriMesh(laserBeam_1, 50,  25), metal(.5, .007, .0));
+     }
+    m.restore();
+
+    //laser glob around planet
+    m.save();
+       m.identity();
+       m.rotateZ(-6.5);
+       m.rotateY(-6);
+       m.translate(-4.5,4,4);
+       m.scale(.12);
+       if(time >= 7 && time < 8) {
+        drawMesh(m, createTriMesh(glob, 100,  50), metal(.5, .007, .05));
+      }
+    m.restore();
+
+    //hyperdrive simulation using quick flash of white
+    if(time > 20 && time < 20.1) {
+      bgColor=[1, 1, 1];
+    } else {
+      bgColor = [0, 0, 0];
+    }
+}
+
+gl_start(canvas1, vs, fs);
+</script>
